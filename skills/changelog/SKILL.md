@@ -298,6 +298,28 @@ export const PUBLISHED_PR_NUMBERS = CHANGELOG.flatMap((e) => e.prs.map((p) => p.
 
 Match indentation, quote style, and naming of each repo exactly. After editing, if the site has a formatter available, run it too so a `format:check` gate passes (`npm run format`, i.e. biome/prettier `--write`). If the site has a typecheck/lint/build available, run it (`npm run lint` / `npx tsc --noEmit` / `npm run build`) and fix any error your change introduced. If `npm` isn't available in the run, skip silently and note it in the PR body.
 
+## B.4.1. Format the file you changed (MANDATORY, both runs)
+
+The website's CI runs a `format:check` gate (`biome ci .` or `prettier --check`). A hand-written `changelog-data.ts` entry almost never matches the formatter's exact output (quote style, trailing commas, indent, line wrapping), so an unformatted prepend lands the PR **CI-red** - this is the common failure, not an edge case. Format the file(s) you touched before committing, on **every** run (normal prepend and bootstrap alike):
+
+```bash
+# Detect the repo's formatter + PINNED version so output matches its `format:check`.
+# Use npx (no repo `npm ci` needed); a bare/newer formatter can format differently
+# than the pinned one and still fail the gate, so pin the version the repo declares.
+FILES="app/changelog-data.ts"   # add any other files a bootstrap run created/edited
+if [ -f biome.json ] || [ -f biome.jsonc ] || grep -q '"@biomejs/biome"' package.json 2>/dev/null; then
+  BV=$(node -p "require('./package.json').devDependencies?.['@biomejs/biome']||require('./package.json').dependencies?.['@biomejs/biome']||''" 2>/dev/null | tr -d '^~ ')
+  npx --yes @biomejs/biome@"${BV:-latest}" format --write $FILES || echo "::warning::biome format skipped"
+elif [ -f .prettierrc ] || [ -f .prettierrc.json ] || [ -f prettier.config.js ] || grep -q '"prettier"' package.json 2>/dev/null; then
+  PV=$(node -p "require('./package.json').devDependencies?.prettier||require('./package.json').dependencies?.prettier||''" 2>/dev/null | tr -d '^~ ')
+  npx --yes prettier@"${PV:-latest}" --write $FILES || echo "::warning::prettier format skipped"
+else
+  echo "no formatter config found - note in PR body"
+fi
+```
+
+If neither formatter is present, note it in the PR body. Do not skip this step silently on a normal run - the missing format is exactly what turns a one-line changelog prepend into a red PR.
+
 ## B.5. Branch, commit, PR
 
 ```bash
